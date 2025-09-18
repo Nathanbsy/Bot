@@ -1,5 +1,3 @@
-//const TOKEN = "MTQxMjI2MTgwNTQ1NTE4Mzg5Mg.GkF-IY.IojCejavzt0dG2XIB9TqXLNNrxYdPhNHIStPkE";
-
 // ===============================
 // Bot de Música com DisTube
 // ===============================
