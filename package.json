@@ -13,6 +13,7 @@
     "discord.js": "^14.22.1",
     "distube": "^5.0.7",
     "@distube/yt-dlp": "^2.0.1",
+    "@distube/youtube": "^5.0.7",
     "@discordjs/voice": "^0.19.0",
     "dotenv": "^16.4.5",
     "opusscript": "^0.0.8",
