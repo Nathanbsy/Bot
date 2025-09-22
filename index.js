@@ -1,5 +1,5 @@
 // ===============================
-// Bot de Música com DisTube (versão mais segura)
+// Bot de Música com DisTube (versão corrigida)
 // ===============================
 
 const keepAlive = require("./server.js");
@@ -36,30 +36,24 @@ client.once("ready", () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
-// Função auxiliar segura para enviar mensagens a um "canal-like"
+// Função auxiliar segura para enviar mensagens
 async function safeSend(possibleChannel, payload) {
   try {
     if (!possibleChannel) return false;
 
-    // Se já for um channel com send()
     if (typeof possibleChannel.send === "function") {
       await possibleChannel.send(payload);
       return true;
     }
-
-    // Se for um objeto Queue do DisTube (tem .textChannel)
     if (possibleChannel.textChannel && typeof possibleChannel.textChannel.send === "function") {
       await possibleChannel.textChannel.send(payload);
       return true;
     }
-
-    // Alguns objetos podem ter .channel (ex: outro wrapper)
     if (possibleChannel.channel && typeof possibleChannel.channel.send === "function") {
       await possibleChannel.channel.send(payload);
       return true;
     }
 
-    // Tentar canal do sistema da guild (fallback)
     const guild = possibleChannel.guild || possibleChannel?.textChannel?.guild || possibleChannel?.channel?.guild;
     if (guild && guild.systemChannel && typeof guild.systemChannel.send === "function") {
       await guild.systemChannel.send(payload);
@@ -80,7 +74,7 @@ client.on("messageCreate", async (message) => {
   const args = message.content.split(" ");
   const command = args[0].toLowerCase();
 
-  // !penis (seu comando !play)
+  // !penis (seu comando play)
   if (command === "!penis") {
     const query = args.slice(1).join(" ").trim();
     if (!query) return message.reply("❌ Você precisa passar um link ou nome da música!");
@@ -100,15 +94,13 @@ client.on("messageCreate", async (message) => {
     } catch (err) {
       console.error("Erro ao tocar música (play):", err);
 
-      // Caso comum quando o host não permite voz/UDP
       const isVoiceConnectFailed = err?.errorCode === "VOICE_CONNECT_FAILED"
         || (err?.message && err.message.includes("Cannot connect to the voice channel"))
         || (String(err).includes("VOICE_CONNECT_FAILED"));
 
       if (isVoiceConnectFailed) {
-        message.reply("❌ Falha ao conectar ao canal de voz — provavelmente a hospedagem (ex: Render) não permite conexões de voz/UDP. Para música, use um VPS ou host que suporte Discord Voice.");
+        message.reply("❌ Falha ao conectar ao canal de voz — provavelmente a hospedagem não permite conexões de voz/UDP.");
       } else {
-        // Mensagem de erro para o usuário (ex: "Nenhum resultado")
         message.reply(`❌ Erro ao tentar tocar: ${err?.message ?? String(err)}`);
       }
     }
@@ -170,7 +162,6 @@ client.on("messageCreate", async (message) => {
       .setDescription(q)
       .setFooter({ text: `Total: ${queue.songs.length} músicas` });
 
-    // usar safeSend por precaução
     await safeSend(message.channel, { embeds: [embed] });
   }
 
@@ -203,7 +194,7 @@ client.on("messageCreate", async (message) => {
 });
 
 // ===============================
-// Eventos de reprodução (com safeSend)
+// Eventos de reprodução
 // ===============================
 distube.on("playSong", async (queue, song) => {
   try {
@@ -215,7 +206,7 @@ distube.on("playSong", async (queue, song) => {
       .addFields(
         { name: "👤 Autor", value: song.uploader.name ?? "—", inline: true },
         { name: "⏱️ Duração", value: song.formattedDuration ?? "—", inline: true },
-        { name: "🎶 Pedido por", value: `${song.member?.user?.tag ?? String(song.member)}` , inline: true }
+        { name: "🎶 Pedido por", value: `${song.member?.user?.tag ?? String(song.member)}`, inline: true }
       )
       .setFooter({ text: "Bot de Música 🎧" })
       .setTimestamp();
@@ -235,14 +226,23 @@ distube.on("addList", async (queue, playlist) => {
 });
 
 // ===============================
-// Evento de erro - robusto
+// Evento de erro corrigido
 // ===============================
 distube.on("error", async (channel, error) => {
+  let errorMsg;
+
+  if (error instanceof Error) {
+    errorMsg = error.message;
+  } else if (typeof error === "object") {
+    errorMsg = error.constructor?.name || JSON.stringify(error, null, 2);
+  } else {
+    errorMsg = String(error);
+  }
+
   console.error("Erro no DisTube:", error);
 
-  const msg = `❌ Ocorreu um erro no DisTube: ${error?.message ?? String(error)}`;
+  const msg = `❌ Ocorreu um erro no DisTube: ${errorMsg}`;
 
-  // tenta vários destinos de envio sem quebrar
   const sent = await safeSend(channel, msg)
     || await safeSend(channel?.textChannel, msg)
     || await safeSend(channel?.channel, msg);
@@ -252,5 +252,7 @@ distube.on("error", async (channel, error) => {
   }
 });
 
+// ===============================
 // Login
+// ===============================
 client.login(TOKEN);
