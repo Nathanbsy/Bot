@@ -11,9 +11,7 @@ const { DisTube } = require("distube");
 const { YtDlpPlugin } = require("@distube/yt-dlp");
 const { YouTubePlugin } = require("@distube/youtube");
 
-
-
-// Token seguro via variáveis de ambiente (Replit Secrets)
+// Token via variáveis de ambiente
 const TOKEN = process.env.TOKEN;
 
 // Criar cliente Discord
@@ -27,18 +25,15 @@ const client = new Client({
 });
 
 // Inicializar DisTube
-
 const distube = new DisTube(client, {
   nsfw: true,
   emitAddSongWhenCreatingQueue: false,
   emitAddListWhenCreatingQueue: false,
   plugins: [
-  new YouTubePlugin(),
-  new YtDlpPlugin()
-]
+    new YouTubePlugin(),
+    new YtDlpPlugin()
+  ]
 });
-
-
 
 // Quando o bot ligar
 client.once("ready", () => {
@@ -62,7 +57,7 @@ client.on("messageCreate", async (message) => {
     const voiceChannel = message.member?.voice.channel;
     if (!voiceChannel) return message.reply("❌ Você precisa estar em um canal de voz!");
     if (!voiceChannel.permissionsFor(message.client.user).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
-      return message.reply('❌ Não tenho permissões para conectar ou falar no canal de voz!');
+      return message.reply("❌ Não tenho permissões para conectar ou falar no canal de voz!");
     }
 
     try {
@@ -170,7 +165,7 @@ client.on("messageCreate", async (message) => {
 distube.on("playSong", (queue, song) => {
   const embed = new EmbedBuilder()
     .setColor("#1DB954")
-    .setTitle(`🎵 Tocando agora:`)
+    .setTitle("🎵 Tocando agora:")
     .setDescription(`[${song.name}](${song.url})`)
     .setThumbnail(song.thumbnail)
     .addFields(
@@ -190,7 +185,13 @@ distube.on("addList", (queue, playlist) => {
 
 distube.on("error", (channel, error) => {
   console.error("Erro no DisTube:", error);
-  if (channel) channel.send(`❌ Ocorreu um erro: ${error.message}`);
+
+  // Corrigido: evitar crash quando channel não for TextChannel
+  if (channel && channel.send) {
+    channel.send(`❌ Ocorreu um erro: ${error.message}`);
+  } else if (channel?.textChannel) {
+    channel.textChannel.send(`❌ Ocorreu um erro: ${error.message}`);
+  }
 });
 
 // Login
