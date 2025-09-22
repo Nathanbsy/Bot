@@ -11,6 +11,8 @@ const { DisTube } = require("distube");
 const { YtDlpPlugin } = require("@distube/yt-dlp");
 const { YouTubePlugin } = require("@distube/youtube");
 
+
+
 // Token seguro via variáveis de ambiente (Replit Secrets)
 const TOKEN = process.env.TOKEN;
 
@@ -25,18 +27,18 @@ const client = new Client({
 });
 
 // Inicializar DisTube
+
 const distube = new DisTube(client, {
-  leaveOnStop: false,
-  leaveOnEmpty: true,
-  emptyCooldown: 300,
   nsfw: true,
   emitAddSongWhenCreatingQueue: false,
   emitAddListWhenCreatingQueue: false,
   plugins: [
-    new YtDlpPlugin(),
-    new YouTubePlugin()
-  ]
+  new YouTubePlugin(),
+  new YtDlpPlugin()
+]
 });
+
+
 
 // Quando o bot ligar
 client.once("ready", () => {
