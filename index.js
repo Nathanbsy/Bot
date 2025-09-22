@@ -1,5 +1,5 @@
 // ===============================
-// Bot de Música com DisTube
+// Bot de Música com DisTube (versão mais segura)
 // ===============================
 
 const keepAlive = require("./server.js");
@@ -11,10 +11,8 @@ const { DisTube } = require("distube");
 const { YtDlpPlugin } = require("@distube/yt-dlp");
 const { YouTubePlugin } = require("@distube/youtube");
 
-// Token via variáveis de ambiente
 const TOKEN = process.env.TOKEN;
 
-// Criar cliente Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -24,7 +22,6 @@ const client = new Client({
   ]
 });
 
-// Inicializar DisTube
 const distube = new DisTube(client, {
   nsfw: true,
   emitAddSongWhenCreatingQueue: false,
@@ -35,10 +32,44 @@ const distube = new DisTube(client, {
   ]
 });
 
-// Quando o bot ligar
 client.once("ready", () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 });
+
+// Função auxiliar segura para enviar mensagens a um "canal-like"
+async function safeSend(possibleChannel, payload) {
+  try {
+    if (!possibleChannel) return false;
+
+    // Se já for um channel com send()
+    if (typeof possibleChannel.send === "function") {
+      await possibleChannel.send(payload);
+      return true;
+    }
+
+    // Se for um objeto Queue do DisTube (tem .textChannel)
+    if (possibleChannel.textChannel && typeof possibleChannel.textChannel.send === "function") {
+      await possibleChannel.textChannel.send(payload);
+      return true;
+    }
+
+    // Alguns objetos podem ter .channel (ex: outro wrapper)
+    if (possibleChannel.channel && typeof possibleChannel.channel.send === "function") {
+      await possibleChannel.channel.send(payload);
+      return true;
+    }
+
+    // Tentar canal do sistema da guild (fallback)
+    const guild = possibleChannel.guild || possibleChannel?.textChannel?.guild || possibleChannel?.channel?.guild;
+    if (guild && guild.systemChannel && typeof guild.systemChannel.send === "function") {
+      await guild.systemChannel.send(payload);
+      return true;
+    }
+  } catch (err) {
+    console.error("safeSend falhou:", err);
+  }
+  return false;
+}
 
 // ===============================
 // Comandos do bot
@@ -49,7 +80,7 @@ client.on("messageCreate", async (message) => {
   const args = message.content.split(" ");
   const command = args[0].toLowerCase();
 
-  // !play
+  // !penis (seu comando !play)
   if (command === "!penis") {
     const query = args.slice(1).join(" ").trim();
     if (!query) return message.reply("❌ Você precisa passar um link ou nome da música!");
@@ -67,8 +98,19 @@ client.on("messageCreate", async (message) => {
       });
       message.reply(`🎶 Adicionando: **${query}**`);
     } catch (err) {
-      console.error("Erro ao tocar música:", err);
-      message.reply(`❌ Erro ao tentar tocar: ${err.message}`);
+      console.error("Erro ao tocar música (play):", err);
+
+      // Caso comum quando o host não permite voz/UDP
+      const isVoiceConnectFailed = err?.errorCode === "VOICE_CONNECT_FAILED"
+        || (err?.message && err.message.includes("Cannot connect to the voice channel"))
+        || (String(err).includes("VOICE_CONNECT_FAILED"));
+
+      if (isVoiceConnectFailed) {
+        message.reply("❌ Falha ao conectar ao canal de voz — provavelmente a hospedagem (ex: Render) não permite conexões de voz/UDP. Para música, use um VPS ou host que suporte Discord Voice.");
+      } else {
+        // Mensagem de erro para o usuário (ex: "Nenhum resultado")
+        message.reply(`❌ Erro ao tentar tocar: ${err?.message ?? String(err)}`);
+      }
     }
   }
 
@@ -128,7 +170,8 @@ client.on("messageCreate", async (message) => {
       .setDescription(q)
       .setFooter({ text: `Total: ${queue.songs.length} músicas` });
 
-    message.channel.send({ embeds: [embed] });
+    // usar safeSend por precaução
+    await safeSend(message.channel, { embeds: [embed] });
   }
 
   // !loop
@@ -160,37 +203,52 @@ client.on("messageCreate", async (message) => {
 });
 
 // ===============================
-// Eventos de reprodução
+// Eventos de reprodução (com safeSend)
 // ===============================
-distube.on("playSong", (queue, song) => {
-  const embed = new EmbedBuilder()
-    .setColor("#1DB954")
-    .setTitle("🎵 Tocando agora:")
-    .setDescription(`[${song.name}](${song.url})`)
-    .setThumbnail(song.thumbnail)
-    .addFields(
-      { name: "👤 Autor", value: song.uploader.name, inline: true },
-      { name: "⏱️ Duração", value: song.formattedDuration, inline: true },
-      { name: "🎶 Pedido por", value: `${song.member}`, inline: true }
-    )
-    .setFooter({ text: "Bot de Música 🎧" })
-    .setTimestamp();
+distube.on("playSong", async (queue, song) => {
+  try {
+    const embed = new EmbedBuilder()
+      .setColor("#1DB954")
+      .setTitle("🎵 Tocando agora:")
+      .setDescription(`[${song.name}](${song.url})`)
+      .setThumbnail(song.thumbnail)
+      .addFields(
+        { name: "👤 Autor", value: song.uploader.name ?? "—", inline: true },
+        { name: "⏱️ Duração", value: song.formattedDuration ?? "—", inline: true },
+        { name: "🎶 Pedido por", value: `${song.member?.user?.tag ?? String(song.member)}` , inline: true }
+      )
+      .setFooter({ text: "Bot de Música 🎧" })
+      .setTimestamp();
 
-  queue.textChannel.send({ embeds: [embed] });
+    await safeSend(queue, { embeds: [embed] });
+  } catch (err) {
+    console.error("Erro no playSong:", err);
+  }
 });
 
-distube.on("addList", (queue, playlist) => {
-  queue.textChannel.send(`📑 Playlist **${playlist.name}** adicionada com **${playlist.songs.length} músicas**!`);
+distube.on("addList", async (queue, playlist) => {
+  try {
+    await safeSend(queue, `📑 Playlist **${playlist.name}** adicionada com **${playlist.songs.length} músicas**!`);
+  } catch (err) {
+    console.error("Erro em addList:", err);
+  }
 });
 
-distube.on("error", (channel, error) => {
+// ===============================
+// Evento de erro - robusto
+// ===============================
+distube.on("error", async (channel, error) => {
   console.error("Erro no DisTube:", error);
 
-  // Corrigido: evitar crash quando channel não for TextChannel
-  if (channel && channel.send) {
-    channel.send(`❌ Ocorreu um erro: ${error.message}`);
-  } else if (channel?.textChannel) {
-    channel.textChannel.send(`❌ Ocorreu um erro: ${error.message}`);
+  const msg = `❌ Ocorreu um erro no DisTube: ${error?.message ?? String(error)}`;
+
+  // tenta vários destinos de envio sem quebrar
+  const sent = await safeSend(channel, msg)
+    || await safeSend(channel?.textChannel, msg)
+    || await safeSend(channel?.channel, msg);
+
+  if (!sent) {
+    console.error("Não foi possível enviar mensagem de erro para o canal. Mensagem:", msg);
   }
 });
 
